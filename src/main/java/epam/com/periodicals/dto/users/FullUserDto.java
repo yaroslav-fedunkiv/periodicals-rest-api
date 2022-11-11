@@ -13,7 +13,6 @@ public class FullUserDto {
     private String role;
     private String email;
     private String balance;
-
     private String address;
     private String isActive;
     private String password;

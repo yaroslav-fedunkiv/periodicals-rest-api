@@ -4,6 +4,7 @@ import epam.com.periodicals.dto.publishers.CreatePublisherDto;
 import epam.com.periodicals.dto.publishers.FullPublisherDto;
 import epam.com.periodicals.dto.publishers.UpdatePublisherDto;
 import epam.com.periodicals.dto.subscriptions.SubscribeDto;
+import epam.com.periodicals.exceptions.NoSuchPublisherException;
 import epam.com.periodicals.model.Publisher;
 import epam.com.periodicals.model.Subscriptions;
 import epam.com.periodicals.model.Topics;
@@ -104,8 +105,13 @@ public class PublisherServiceImpl implements PublisherService {
     @Override
     public Optional<FullPublisherDto> getByTitle(String title) {
         log.info("start method getByTitle() in publisher service {}", title);
-        Publisher publisher = publisherRepository.getByTitle(title);
-        return Optional.of(mapper.map(publisher, FullPublisherDto.class));
+        try {
+            Publisher publisher = publisherRepository.getByTitle(title);
+            return Optional.of(mapper.map(publisher, FullPublisherDto.class));
+        } catch (IllegalArgumentException e) {
+            log.info("This title was not found {}", title);
+            throw new NoSuchPublisherException();
+        }
     }
 
     @Override
