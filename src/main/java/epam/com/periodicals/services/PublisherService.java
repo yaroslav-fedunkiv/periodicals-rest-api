@@ -20,7 +20,6 @@ public interface PublisherService {
     void updatePublisher(UpdatePublisherDto updatePublisher);
     boolean isActive(String title);
     List<FullPublisherDto> getAllByPages(String page);
-
     List<FullPublisherDto> sortingBy(String sortingOption, String page);
     List<FullPublisherDto> getByTopic(String topic, String page);
 }
