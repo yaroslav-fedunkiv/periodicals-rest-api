@@ -13,7 +13,7 @@ public interface PublisherService {
     void createPublisher(CreatePublisherDto createPublisherDto);
     List<FullPublisherDto> getAll();
     List<FullPublisherDto> search(String title);
-    void subscribe(SubscribeDto subscribeDto);
+    void subscribe(String email, String title, SubscribeDto subscribeDto);
     Optional<FullPublisherDto> getByTitle(String title);
     FullPublisherDto getById(String id);
     void deactivatePublisher(String title);

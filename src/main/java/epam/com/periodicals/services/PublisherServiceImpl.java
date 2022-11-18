@@ -4,7 +4,9 @@ import epam.com.periodicals.dto.publishers.CreatePublisherDto;
 import epam.com.periodicals.dto.publishers.FullPublisherDto;
 import epam.com.periodicals.dto.publishers.UpdatePublisherDto;
 import epam.com.periodicals.dto.subscriptions.SubscribeDto;
+import epam.com.periodicals.dto.users.FullUserDto;
 import epam.com.periodicals.exceptions.NoSuchPublisherException;
+import epam.com.periodicals.exceptions.UserIsAlreadySubscribedException;
 import epam.com.periodicals.model.Publisher;
 import epam.com.periodicals.model.Subscriptions;
 import epam.com.periodicals.model.Topics;
@@ -30,7 +32,8 @@ public class PublisherServiceImpl implements PublisherService {
     private PublisherRepository publisherRepository;
     @Resource
     private SubscriptionRepository subscriptionRepository;
-
+    @Resource
+    private UserService userService;
     @Resource
     private ModelMapper mapper;
 
@@ -122,12 +125,6 @@ public class PublisherServiceImpl implements PublisherService {
     }
 
     @Override
-    public void subscribe(SubscribeDto subscribeDto){
-        subscriptionRepository.save(mapper.map(subscribeDto, Subscriptions.class));
-        log.info("user was subscribe inside subscribe() method in publisherServiceImpl {} ", subscribeDto);
-    }
-
-    @Override
     @Transactional
     public void deactivatePublisher(String title) {
         log.info("start method deletePublisher() by title in publisher service {}", title);
@@ -137,5 +134,28 @@ public class PublisherServiceImpl implements PublisherService {
     public boolean isActive(String title){
         log.info("check if user with such email {} is active", title);
         return Boolean.parseBoolean(getByTitle(title).get().getIsActive());
+    }
+
+    @Transactional
+    @Override
+    public void subscribe(String email, String title, SubscribeDto subscribeDto){
+        FullUserDto user = userService.getByEmail(email).orElseThrow();
+        FullPublisherDto publisher = getByTitle(title).orElseThrow();
+        subscribeDto.setUserId(user.getId());
+        subscribeDto.setPublisherId(publisher.getId());
+        if (!isSubscribed(email, title)){
+            userService.writeOffFromBalance(publisher.getPrice(), user.getEmail());
+            subscriptionRepository.save(mapper.map(subscribeDto, Subscriptions.class));
+            log.info("user was subscribe inside subscribe() method in publisherServiceImpl {} ", subscribeDto);
+        } else{
+            log.error("user is already subscribed");
+            throw new UserIsAlreadySubscribedException();
+        }
+    }
+    private boolean isSubscribed(String email, String title){
+        FullUserDto user = userService.getByEmail(email).orElseThrow();
+        FullPublisherDto publisher = getByTitle(title).orElseThrow();
+        List<Subscriptions> subscriptions = subscriptionRepository.findByPublisherIdAndUserId(Long.parseLong(publisher.getId()), Long.parseLong(user.getId()));
+        return !subscriptions.isEmpty();
     }
 }
