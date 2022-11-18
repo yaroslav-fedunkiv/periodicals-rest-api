@@ -1,6 +1,6 @@
 package epam.com.periodicals.exceptions;
 
-public class NotEnoughMoneyException extends Exception{
+public class NotEnoughMoneyException extends RuntimeException{
     public NotEnoughMoneyException() {
         super();
     }
