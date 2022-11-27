@@ -11,15 +11,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface PublisherRepository extends JpaRepository<Publisher, Long> {
-    Publisher getByTitle(String title);
-
-    @Modifying
-    @Query(value = "update publisher set is_active = false where title = ?1", nativeQuery = true)
-    void deactivatePublisher(String title);
-    @Modifying
-    @Query(value = "update publisher set title = ?1, topic = ?2, price = ?3, description = ?4" +
-           " where title = ?5", nativeQuery = true)
-    void updatePublisher(String newTitle, String topic, Double price, String description, String oldTitle);
+    Publisher findByTitle(String title);
 
     @Modifying
     @Query(value = "select p from Publisher p WHERE p.title LIKE %:title% and p.isActive = true")

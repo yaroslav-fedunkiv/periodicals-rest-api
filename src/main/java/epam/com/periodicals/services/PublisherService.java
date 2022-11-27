@@ -10,14 +10,13 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PublisherService {
-    void createPublisher(CreatePublisherDto createPublisherDto);
+    Optional<FullPublisherDto> createPublisher(CreatePublisherDto createPublisherDto);
     List<FullPublisherDto> getAll();
     List<FullPublisherDto> search(String title);
-    void subscribe(String email, String title, SubscribeDto subscribeDto);
+    SubscribeDto subscribe(String email, String title, SubscribeDto subscribeDto);
     Optional<FullPublisherDto> getByTitle(String title);
-    FullPublisherDto getById(String id);
-    void deactivatePublisher(String title);
-    void updatePublisher(UpdatePublisherDto updatePublisher);
+    FullPublisherDto deactivatePublisher(String title);
+    UpdatePublisherDto updatePublisher(UpdatePublisherDto updatePublisher, String title);
     boolean isActive(String title);
     List<FullPublisherDto> getAllByPages(String page);
     List<FullPublisherDto> sortingBy(String sortingOption, String page);
