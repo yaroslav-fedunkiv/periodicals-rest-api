@@ -3,6 +3,7 @@ package epam.com.periodicals.dto.users;
 import lombok.*;
 
 import javax.validation.constraints.Email;
+import javax.validation.constraints.Pattern;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -11,14 +12,12 @@ import javax.validation.constraints.Email;
 @ToString
 public class UpdateUserDto {
     @Email(message = "{user.wrong.email}")
-    private String oldEmail;
-
-    private String email;
+    private String newEmail;
 
     private String fullName;
 
     private String address;
 
+    @Pattern(regexp = "^\\d{1,5}\\.\\d{2}", message = "{user.wrong.balance}")
     private String balance;
-
 }

@@ -7,11 +7,11 @@ import epam.com.periodicals.exceptions.NoSuchUserException;
 import epam.com.periodicals.exceptions.NotEnoughMoneyException;
 import epam.com.periodicals.model.User;
 import epam.com.periodicals.repositories.UserRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
 import javax.transaction.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -21,18 +21,18 @@ import java.util.stream.Collectors;
 
 @Service
 @Log4j2
+@RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
-    @Resource
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
 
-    @Resource
-    private ModelMapper mapper;
+    private final ModelMapper mapper;
 
     @Override
-    public void addUser(CreateUserDto createUserDto) {
+    public Optional<FullUserDto> addUser(CreateUserDto createUserDto) {
         log.info("start method addUser() in userService: " + createUserDto.getEmail());
         userRepository.save(mapper.map(createUserDto, User.class));
         log.info("added new user");
+        return getByEmail(createUserDto.getEmail());
     }
 
     @Override
@@ -57,62 +57,78 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public void updateUser(UpdateUserDto updatedUser) {
-        FullUserDto fullUserDto = null;
-        try {
-            fullUserDto = getByEmail(updatedUser.getOldEmail()).get();
-        } catch (IllegalArgumentException e) {
-            log.info("This user {} was not found ", updatedUser.getOldEmail());
-            throw new NoSuchUserException();
-        }
-        CreateUserDto editUser = new CreateUserDto();
-        String oldEmail = fullUserDto.getEmail();
-        String newEmail = updatedUser.getEmail() == null
-                ? updatedUser.getOldEmail() : updatedUser.getEmail();
-        String fullName = updatedUser.getFullName() == null
-                ? fullUserDto.getFullName() : updatedUser.getFullName();
-        String address = updatedUser.getAddress() == null
-                ? fullUserDto.getAddress() : updatedUser.getAddress();
-        log.warn("User "+oldEmail+" was updated with fields:\n"
-                + fullName +"\n"+ newEmail +"\n"+ address);
+    public UpdateUserDto updateUser(UpdateUserDto updateUserDto, String email){
+        FullUserDto fullUserDto = getByEmail(email).orElseThrow();
 
-        userRepository.updateUser(oldEmail, fullName, newEmail, address);
+        Optional<User> user = userRepository.findById(Long.parseLong(fullUserDto.getId()));
+        log .error("user ==> "+ user);
+
+        String newEmail = updateUserDto.getNewEmail() == null
+                ? email : updateUserDto.getNewEmail();
+        String fullName = updateUserDto.getFullName() == null
+                ? fullUserDto.getFullName() : updateUserDto.getFullName();
+        String address = updateUserDto.getAddress() == null
+                ? fullUserDto.getAddress() : updateUserDto.getAddress();
+        String balance = updateUserDto.getBalance() == null
+                ? fullUserDto.getBalance() : updateUserDto.getBalance();
+
+        user.orElseThrow().setEmail(newEmail);
+        user.orElseThrow().setFullName(fullName);
+        user.orElseThrow().setAddress(address);
+        user.orElseThrow().setBalance(Double.parseDouble(balance));
+        User updatedUser = userRepository.save(user.orElseThrow());
+        log.warn("User "+email+" was updated with fields:\n"
+                + fullName +"\n"+ newEmail +"\n"+ address+"\n"+ balance);
+        return mapper.map(updatedUser, UpdateUserDto.class);
     }
 
     @Override
     @Transactional
-    public Double writeOffFromBalance(String price, String email) throws NotEnoughMoneyException {
+    public FullUserDto replenishBalance(String newBalance, String email) {
         log.info("start replenish the balance {}", email);
-        FullUserDto user = getByEmail(email).get();
-        if (Double.parseDouble(price) > Double.parseDouble(getByEmail(email).get().getBalance())){
+        FullUserDto userDto = getByEmail(email).orElseThrow();
+
+        Double balance = Double.parseDouble(newBalance) + Double.parseDouble(userDto.getBalance());
+        Optional<User> user = userRepository.findById(Long.parseLong(userDto.getId()));
+        user.orElseThrow().setBalance(balance);
+        User editedBalance = userRepository.save(user.orElseThrow());
+        return mapper.map(editedBalance, FullUserDto.class);
+    }
+
+    @Override
+    @Transactional
+    public FullUserDto writeOffFromBalance(String price, String email) throws NotEnoughMoneyException{
+        log.info("start write money off from the user balance {}", email);
+        FullUserDto userDto = getByEmail(email).orElseThrow();
+        Optional<User> user = userRepository.findById(Long.parseLong(userDto.getId()));
+        if (Double.parseDouble(price) > Double.parseDouble(getByEmail(email).orElseThrow().getBalance())){
+            log.error("user haven't enough money");
             throw new NotEnoughMoneyException("Not enough money");
         }
-        Double balance = Double.parseDouble(user.getBalance()) - Double.parseDouble(price);
-        userRepository.updateBalance(round(balance), email);
-        return balance;
+        Double balance = Double.parseDouble(userDto.getBalance()) - Double.parseDouble(price);
+
+        user.orElseThrow().setBalance(round(balance));
+        User editedBalance = userRepository.save(user.orElseThrow());
+
+        return mapper.map(editedBalance, FullUserDto.class);
     }
 
     @Override
     @Transactional
-    public Double replenishBalance(String newBalance, String email) {
-        log.info("start replenish the balance {}", email);
-        FullUserDto user = getByEmail(email).get();
-        Double balance = Double.parseDouble(newBalance) + Double.parseDouble(user.getBalance());
-        userRepository.updateBalance(balance, email);
-        return balance;
-    }
-
-    @Override
-    @Transactional
-    public void deactivateUser(String email) {
-        userRepository.deactivateUser(email);
+    public FullUserDto deactivateUser(String email) {
+        log.info("start deactivating user: {}", email);
+        FullUserDto userDto = getByEmail(email).orElseThrow();
+        Optional<User> user = userRepository.findById(Long.parseLong(userDto.getId()));
+        user.orElseThrow().setIsActive(false);
+        User deactivatedUser = userRepository.save(user.orElseThrow());
         log.info("user {} is deactivated", email);
+        return mapper.map(deactivatedUser, FullUserDto.class);
     }
 
     @Override
     public boolean isActive(String email){
         log.info("check if user with such email {} is active", email);
-        return Boolean.parseBoolean(getByEmail(email).get().getIsActive());
+        return Boolean.parseBoolean(getByEmail(email).orElseThrow().getIsActive());
     }
 
     private Double round(Double value) {

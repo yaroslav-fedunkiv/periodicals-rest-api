@@ -12,6 +12,7 @@ import epam.com.periodicals.model.Subscriptions;
 import epam.com.periodicals.model.Topics;
 import epam.com.periodicals.repositories.PublisherRepository;
 import epam.com.periodicals.repositories.SubscriptionRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.PageRequest;
@@ -19,7 +20,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
 import javax.transaction.Transactional;
 import java.util.List;
 import java.util.Optional;
@@ -27,35 +27,30 @@ import java.util.stream.Collectors;
 
 @Log4j2
 @Service
+@RequiredArgsConstructor
 public class PublisherServiceImpl implements PublisherService {
-    @Resource
-    private PublisherRepository publisherRepository;
-    @Resource
-    private SubscriptionRepository subscriptionRepository;
-    @Resource
-    private UserService userService;
-    @Resource
-    private ModelMapper mapper;
+    private final PublisherRepository publisherRepository;
+    private final UserService userService;
+    private final SubscriptionRepository subscriptionRepository;
+    private final ModelMapper mapper;
 
     @Override
-    public void createPublisher(CreatePublisherDto createPublisherDto) {
-        publisherRepository.save(mapper.map(createPublisherDto, Publisher.class));
+    public Optional<FullPublisherDto> createPublisher(CreatePublisherDto createPublisherDto) {
+        Publisher publisher = publisherRepository.save(mapper.map(createPublisherDto, Publisher.class));
         log.info("publisher is saved {}", createPublisherDto);
+        return Optional.of(mapper.map(publisher, FullPublisherDto.class));
     }
 
-    @Transactional
     @Override
-    public void updatePublisher(UpdatePublisherDto updatePublisher){
-        FullPublisherDto publisher = getByTitle(updatePublisher.getOldTitle()).get();
-
-        String oldTitle = updatePublisher.getOldTitle();
-        String newTitle = (updatePublisher.getTitle() == null ? updatePublisher.getOldTitle() : updatePublisher.getTitle());
-        String topic = (updatePublisher.getTopic() == null ? publisher.getTopic() : updatePublisher.getTopic());
-        String price = (updatePublisher.getPrice() == null ? publisher.getPrice() : updatePublisher.getPrice());
-        String description = (updatePublisher.getDescription() == null ? publisher.getDescription() : updatePublisher.getDescription());
-
-        log.warn("update "+oldTitle+" with fields:\n"+newTitle+"\n"+price+"\n"+topic+"\n"+description);
-        publisherRepository.updatePublisher(newTitle, topic, Double.parseDouble(price), description, oldTitle);
+    public Optional<FullPublisherDto> getByTitle(String title) {
+        log.info("start method getByTitle() in publisher service {}", title);
+        try {
+            Publisher publisher = publisherRepository.findByTitle(title);
+            return Optional.of(mapper.map(publisher, FullPublisherDto.class));
+        } catch (IllegalArgumentException e) {
+            log.info("This title was not found {}", title);
+            throw new NoSuchPublisherException();
+        }
     }
 
     @Override
@@ -66,34 +61,56 @@ public class PublisherServiceImpl implements PublisherService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional
+    @Override
+    public UpdatePublisherDto updatePublisher(UpdatePublisherDto updatePublisher, String title){
+        FullPublisherDto publisherDto = getByTitle(title).orElseThrow();
+        Optional<Publisher> publisher = publisherRepository.findById(Long.parseLong(publisherDto.getId()));
+
+        String newTitle = (updatePublisher.getNewTitle() == null ? title : updatePublisher.getNewTitle());
+        String topic = (updatePublisher.getTopic() == null ? publisherDto.getTopic() : updatePublisher.getTopic());
+        String price = (updatePublisher.getPrice() == null ? publisherDto.getPrice() : updatePublisher.getPrice());
+        String description = (updatePublisher.getDescription() == null ? publisherDto.getDescription() : updatePublisher.getDescription());
+
+        publisher.orElseThrow().setTitle(newTitle);
+        publisher.orElseThrow().setTopic(Topics.valueOf(topic));
+        publisher.orElseThrow().setPrice(Double.parseDouble(price));
+        publisher.orElseThrow().setDescription(description);
+
+        Publisher updatedPublisher = publisherRepository.save(publisher.orElseThrow());
+
+        log.warn("update "+title+" with fields:\n"+newTitle+"\n"+price+"\n"+topic+"\n"+description);
+        return mapper.map(updatedPublisher, UpdatePublisherDto.class);
+    }
+
     @Override
     public List<FullPublisherDto> getAllByPages(String page) {
         Pageable pagesWithThreeElements = PageRequest.of(Integer.parseInt(page), 3);
-        log.info("start method getAllByPages() in publisher service");
-           return publisherRepository.findAll(pagesWithThreeElements)
-                   .stream()
-                   .map(e -> mapper.map(e, FullPublisherDto.class))
-                   .collect(Collectors.toList());
+        log.info("start method getAll() in publisher service");
+        return publisherRepository.findAll(pagesWithThreeElements)
+                .stream()
+                .map(e -> mapper.map(e, FullPublisherDto.class))
+                .collect(Collectors.toList());
     }
 
     @Override
     public List<FullPublisherDto> sortingBy(String sortingOption, String page) {
         Pageable pagesWithThreeElements = PageRequest.of(Integer.parseInt(page), 3, Sort.by(sortingOption));
         log.info("start method getAll() in publisher service");
-           return publisherRepository.findAll(pagesWithThreeElements)
-                   .stream()
-                   .map(e -> mapper.map(e, FullPublisherDto.class))
-                   .collect(Collectors.toList());
+        return publisherRepository.findAll(pagesWithThreeElements)
+                .stream()
+                .map(e -> mapper.map(e, FullPublisherDto.class))
+                .collect(Collectors.toList());
     }
 
     @Override
     public List<FullPublisherDto> getByTopic(String topic, String page) {
         Pageable pagesWithThreeElements = PageRequest.of(Integer.parseInt(page), 3);
-        log.info("start method getByTopic() in publisher service");
-           return publisherRepository.findByTopic(pagesWithThreeElements, Topics.valueOf(topic))
-                   .stream()
-                   .map(e -> mapper.map(e, FullPublisherDto.class))
-                   .collect(Collectors.toList());
+        log.info("start method getAll() in publisher service");
+        return publisherRepository.findByTopic(pagesWithThreeElements, Topics.valueOf(topic))
+                .stream()
+                .map(e -> mapper.map(e, FullPublisherDto.class))
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -104,41 +121,27 @@ public class PublisherServiceImpl implements PublisherService {
                 .collect(Collectors.toList());
     }
 
-
-    @Override
-    public Optional<FullPublisherDto> getByTitle(String title) {
-        log.info("start method getByTitle() in publisher service {}", title);
-        try {
-            Publisher publisher = publisherRepository.getByTitle(title);
-            return Optional.of(mapper.map(publisher, FullPublisherDto.class));
-        } catch (IllegalArgumentException e) {
-            log.info("This title was not found {}", title);
-            throw new NoSuchPublisherException();
-        }
-    }
-
-    @Override
-    public FullPublisherDto getById(String id) {
-        log.info("start method getById() in publisher service {}", id);
-        FullPublisherDto fullPublisherDto = mapper.map(publisherRepository.getById(Long.parseLong(id)), FullPublisherDto.class);
-        return fullPublisherDto;
-    }
-
     @Override
     @Transactional
-    public void deactivatePublisher(String title) {
+    public FullPublisherDto deactivatePublisher(String title) {
         log.info("start method deletePublisher() by title in publisher service {}", title);
-            publisherRepository.deactivatePublisher(title);
+        FullPublisherDto publisherDto = getByTitle(title).orElseThrow();
+        Optional<Publisher> publisher = publisherRepository.findById(Long.parseLong(publisherDto.getId()));
+        publisher.orElseThrow().setIsActive(false);
+        Publisher deactivatedPublisher = publisherRepository.save(publisher.orElseThrow());
+        log.info("publisher {} was deactivated", title);
+        return mapper.map(deactivatedPublisher, FullPublisherDto.class);
     }
+
     @Override
     public boolean isActive(String title){
         log.info("check if user with such email {} is active", title);
-        return Boolean.parseBoolean(getByTitle(title).get().getIsActive());
+        return Boolean.parseBoolean(getByTitle(title).orElseThrow().getIsActive());
     }
 
     @Transactional
     @Override
-    public void subscribe(String email, String title, SubscribeDto subscribeDto){
+    public SubscribeDto subscribe(String email, String title, SubscribeDto subscribeDto){
         FullUserDto user = userService.getByEmail(email).orElseThrow();
         FullPublisherDto publisher = getByTitle(title).orElseThrow();
         subscribeDto.setUserId(user.getId());
@@ -147,6 +150,7 @@ public class PublisherServiceImpl implements PublisherService {
             userService.writeOffFromBalance(publisher.getPrice(), user.getEmail());
             subscriptionRepository.save(mapper.map(subscribeDto, Subscriptions.class));
             log.info("user was subscribe inside subscribe() method in publisherServiceImpl {} ", subscribeDto);
+            return subscribeDto;
         } else{
             log.error("user is already subscribed");
             throw new UserIsAlreadySubscribedException();

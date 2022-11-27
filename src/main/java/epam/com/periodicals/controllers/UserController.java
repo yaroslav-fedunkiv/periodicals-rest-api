@@ -30,6 +30,19 @@ public class UserController {
     @Resource
     private UserService userService;
 
+    @Operation(summary = "Get all users")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Found all users",
+                    content = {@Content(mediaType = "application/json",
+                            schema = @Schema(implementation = FullUserDto.class))})
+    })
+    @GetMapping("/get-all")
+    public List<FullUserDto> getAllUsers() {
+        List<FullUserDto> list = userService.getAll();
+        log.info("got all users");
+        return list;
+    }
+
     @Operation(summary = "Create a user")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "User was created",
@@ -46,10 +59,7 @@ public class UserController {
         return new ResponseEntity<>(createUserDto.getEmail() + ": user was created", HttpStatus.OK);
     }
 
-    @Operation(summary = "Replenish user's balance")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Balance was replenished"),
-            @ApiResponse(responseCode = "404", description = "User not found")})
+
     @PatchMapping("/replenish-balance/{email}")
     public ResponseEntity<Object> replenish(@Valid @RequestBody UpdateUserDto user,
                                             @PathVariable("email") String email) {
@@ -70,28 +80,15 @@ public class UserController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "User was updated"),
             @ApiResponse(responseCode = "404", description = "User not found")})
-    @PatchMapping("/update")
-    public ResponseEntity<Object> updateUser(@Valid @RequestBody UpdateUserDto user) {
+    @PatchMapping("/update/{email}")
+    public ResponseEntity<Object> updateUser(@Valid @RequestBody UpdateUserDto user, @PathVariable("email") String email) {
         try{
-            userService.updateUser(user);
-            log.info("user was updated {}", user.getOldEmail());
-            return new ResponseEntity<>("User " + user.getOldEmail() + " was apdated", HttpStatus.OK);
+            userService.updateUser(user, email);
+            log.info("user was updated {}", email);
+            return new ResponseEntity<>("User " + email + " was updated", HttpStatus.OK);
         }catch (NoSuchUserException e){
-            return new ResponseEntity<>("User with such email doesn't exist " + user.getOldEmail(), HttpStatus.NOT_FOUND);
+            return new ResponseEntity<>("User with such email doesn't exist " + email, HttpStatus.NOT_FOUND);
         }
-    }
-
-    @Operation(summary = "Get all users")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Found all users",
-                    content = {@Content(mediaType = "application/json",
-                            schema = @Schema(implementation = FullUserDto.class))})
-    })
-    @GetMapping("/get-all")
-    public List<FullUserDto> getAllUsers() {
-        List<FullUserDto> list = userService.getAll();
-        log.info("got all users");
-        return list;
     }
 
     @Operation(summary = "Get a user by its email")
@@ -105,7 +102,12 @@ public class UserController {
     public ResponseEntity<Object> getByEmail(@Parameter(description = "email of user to be searched")
                                              @PathVariable("email") String email) {
         log.info("getting user by email {}", email);
+        try{
             return new ResponseEntity<>(userService.getByEmail(email), HttpStatus.OK);
+        } catch (NoSuchUserException e){
+            log.error("User with such email was not found");
+            return new ResponseEntity<>(email + " — the user with such email was not found", HttpStatus.NOT_FOUND);
+        }
     }
 
     @Operation(summary = "Deactivate a user by its email")
